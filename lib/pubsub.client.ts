@@ -163,6 +163,7 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
         
         const message = {
             body: JSON.stringify(serializedPacket.data),
+            groupId: packet.id,
             messageAttributes: {
                 pattern: {
                     DataType: 'String',

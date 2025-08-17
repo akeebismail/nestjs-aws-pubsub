@@ -97,6 +97,7 @@ class PubSubClient extends microservices_1.ClientProxy {
         this.logger.log(`Serialized packet: ${JSON.stringify(serializedPacket)}`);
         const message = {
             body: JSON.stringify(serializedPacket.data),
+            groupId: packet.id,
             messageAttributes: {
                 pattern: {
                     DataType: 'String',
