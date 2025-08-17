@@ -66,25 +66,31 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
         return this.client as T;
     }
 
-    protected async publishUnified<T = any>(
+    /**
+     * Sends a message to the SQS queue or SNS topic with the given pattern and data.
+     * If queueName is provided, uses SQS. Otherwise, uses SNS (by topic, topicArn, or default).
+     */
+    public async sendMessage<T = any>(
         pattern: string,
         data: T,
-        options: { name: string},
-        retries: number = this.maxRetries
-    ): Promise<void> {
+        options: { name: string }
+    ) {
+        // Ensure client is connected before sending
+        await this.ensureConnected();
+        
+        // Prefer SQS if queueName is provided or type is 'sqs'
         const packet = {
             pattern,
             data,
             id: this.generateMessageId(),
         };
-
         const serializedPacket = this.serializer.serialize(packet);
         const message = this.createMessage(serializedPacket, packet);
         const producer = this.producers.get(options.name)
         if (!producer) {
             throw new Error(`Producer '${options.name}' not found`);
         }
-        await producer.send(message, retries)
+        await producer.send(message, this.maxRetries)
         return;
     }
 
@@ -103,33 +109,45 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
      * Override dispatchEvent to use unified publish method for SQS/SNS.
      */
     async dispatchEvent(packet: any): Promise<any> {
+        // Ensure client is connected before dispatching
+        await this.ensureConnected();
+        
         const options = packet.options || {};
         await this.publishUnified(packet.pattern, packet.data, options, this.maxRetries);
     }
 
-    /**
-     * Sends a message to the SQS queue or SNS topic with the given pattern and data.
-     * If queueName is provided, uses SQS. Otherwise, uses SNS (by topic, topicArn, or default).
-     */
-    public async sendMessage<T = any>(
+    protected async publishUnified<T = any>(
         pattern: string,
         data: T,
-        options: { name: string }
-    ) {
-        // Prefer SQS if queueName is provided or type is 'sqs'
+        options: { name: string},
+        retries: number = this.maxRetries
+    ): Promise<void> {
+        // Ensure client is connected before publishing
+        await this.ensureConnected();
+        
         const packet = {
             pattern,
             data,
             id: this.generateMessageId(),
         };
+
         const serializedPacket = this.serializer.serialize(packet);
         const message = this.createMessage(serializedPacket, packet);
         const producer = this.producers.get(options.name)
         if (!producer) {
             throw new Error(`Producer '${options.name}' not found`);
         }
-        await producer.send(message, this.maxRetries)
+        await producer.send(message, retries)
         return;
+    }
+
+    /**
+     * Ensures the client is connected. Connects if not already connected.
+     */
+    private async ensureConnected(): Promise<void> {
+        if (this.producers.size === 0) {
+            await this.connect();
+        }
     }
 
     /**

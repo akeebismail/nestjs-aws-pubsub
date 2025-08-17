@@ -88,12 +88,13 @@ export interface Message {
     messageAttributes?: Record<string, MessageAttributeValue>;
 }
 
-export interface PubSubMessageHandlerMeta {
-    name: string;
-    batch?: boolean;
+export interface PubSubModuleOptionsFactory {
+    createOptions(): Promise<PubSubOptions> | PubSubOptions;
 }
 
-export interface PubSubConsumerEventHandlerMeta {
-    name: string;
-    eventName: string;
-} 
+export interface PubSubModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
+    useExisting?: Type<PubSubModuleOptionsFactory>;
+    useClass?: Type<PubSubModuleOptionsFactory>;
+    useFactory?: (...args: any[]) => Promise<PubSubOptions> | PubSubOptions;
+    inject?: any[];
+}
