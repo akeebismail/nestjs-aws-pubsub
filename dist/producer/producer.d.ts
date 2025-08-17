@@ -9,7 +9,7 @@ export declare class Producer {
     private readonly maxRetries;
     constructor(options: ProducerOptions, config: PubSubProducerConfig);
     private setup;
-    send(message: Message | [], retries?: number): Promise<any>;
+    send(message: Message | Message[], retries?: number): Promise<any>;
     protected publishSnsWithRetry<T = any>(topicArn: string, data: Message, retries?: number): Promise<void>;
     private sendSQSBatch;
     private sendSNSBatch;

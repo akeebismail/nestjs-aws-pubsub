@@ -36,7 +36,7 @@ class Producer {
     }
     send(message, retries = this.maxRetries) {
         if (this.options.type == 'sqs') {
-            return this.sendMessage(this.options.queueUrl, message, retries);
+            return this.sendMessageWithRetry(this.options.queueUrl, message, retries);
         }
         return this.publicMessage(this.options.topicArn, message, retries);
     }
@@ -95,6 +95,7 @@ class Producer {
         throw new error_1.FailedBatchMessagesError(failedMessagesBatch);
     }
     async sendMessageWithRetry(queueUrl, message, retries) {
+        message = Array.isArray(message) ? message[0] : message;
         try {
             const command = new client_sqs_1.SendMessageCommand({
                 QueueUrl: queueUrl,

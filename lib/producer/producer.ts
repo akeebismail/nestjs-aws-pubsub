@@ -52,9 +52,9 @@ export class Producer {
         }
     }
 
-    public send(message: Message | [], retries = this.maxRetries): Promise<any> {
+    public send(message: Message | Message[], retries = this.maxRetries): Promise<any> {
         if (this.options.type == 'sqs') {
-            return this.sendMessage(this.options.queueUrl, message, retries);
+            return this.sendMessageWithRetry(this.options.queueUrl, message, retries);
         }
 
         return this.publicMessage(this.options.topicArn, message, retries);
@@ -169,10 +169,10 @@ export class Producer {
      */
     private async sendMessageWithRetry(
         queueUrl: string,
-        message: Message,
+        message: Message | Message[],
         retries: number,
     ): Promise<any> {
-
+        message = Array.isArray(message) ? message[0] : message;
         try {
             const command = new SendMessageCommand({
                 QueueUrl: queueUrl,
