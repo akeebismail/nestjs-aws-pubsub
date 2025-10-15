@@ -598,6 +598,130 @@ export class ConfigService {
 }
 ```
 
+## Troubleshooting
+
+### Server Not Picking Up Messages
+
+If your `PubSubServer` is not picking up messages, here are the most common issues and solutions:
+
+#### 1. **Check Consumer Configuration**
+```typescript
+// Make sure your consumer options are correct
+const options = {
+  consumers: [
+    {
+      name: 'orders-queue',           // ✅ Required: Unique name
+      queueUrl: 'https://sqs...',     // ✅ Required: Full SQS queue URL
+      region: 'us-east-1',            // ✅ Required: AWS region
+    }
+  ],
+  // ... other options
+};
+```
+
+#### 2. **Verify Queue URL and Permissions**
+- Ensure the queue URL is correct and accessible
+- Check that your AWS credentials have `sqs:ReceiveMessage` permissions
+- Verify the queue exists and is not empty
+
+#### 3. **Check Message Format**
+Your messages must include a `pattern` either in:
+- **Message Attributes** (recommended for NestJS):
+```json
+{
+  "MessageAttributes": {
+    "pattern": {
+      "DataType": "String",
+      "StringValue": "order_created"
+    }
+  },
+  "Body": "{\"orderId\": 123}"
+}
+```
+
+- **Message Body** (for Laravel/other services):
+```json
+{
+  "Body": "{\"pattern\": \"order_created\", \"orderId\": 123}"
+}
+```
+
+#### 4. **Enable Debug Logging**
+```typescript
+const server = new PubSubServer({
+  consumers: [/* your config */],
+  logger: console, // Use console for detailed logging
+});
+
+// Add event listeners
+server.on('message_received', (message) => {
+  console.log('Message received:', message.MessageId);
+});
+
+server.on('error', (error) => {
+  console.error('Server error:', error);
+});
+```
+
+#### 5. **Check Server Status**
+```typescript
+// After starting the server
+console.log('Server status:', server.getStatus());
+```
+
+#### 6. **Common Issues and Solutions**
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| No messages received | Queue URL incorrect | Verify queue URL and region |
+| Messages received but not processed | Missing pattern | Ensure pattern in attributes or body |
+| Consumer not starting | AWS credentials | Check IAM permissions |
+| Messages stuck in queue | Handler errors | Check handler implementation |
+
+#### 7. **Debug Script**
+Use the included debug script to test your setup:
+```bash
+# Update the queue URL in debug-server.js
+node debug-server.js
+```
+
+### Client Not Sending Messages
+
+If your `PubSubClient` is not sending messages:
+
+#### 1. **Check Producer Configuration**
+```typescript
+const options = {
+  producer: {
+    config: {
+      accessKey: process.env.AWS_ACCESS_KEY_ID,     // ✅ Required
+      secretKey: process.env.AWS_SECRET_ACCESS_KEY, // ✅ Required
+      region: process.env.AWS_REGION,               // ✅ Required
+    },
+    producers: [
+      {
+        name: 'orders',                    // ✅ Required: Unique name
+        type: 'sqs',                       // ✅ Required: 'sqs' or 'sns'
+        queueUrl: 'https://sqs...',        // ✅ Required for SQS
+        // OR
+        topicArn: 'arn:sns...',            // ✅ Required for SNS
+      }
+    ]
+  }
+};
+```
+
+#### 2. **Verify AWS Credentials**
+- Check environment variables
+- Ensure credentials have proper permissions
+- Test with AWS CLI first
+
+#### 3. **Check Message Format**
+```typescript
+// Make sure you're using the correct producer name
+await client.sendMessage('order_created', data, { name: 'orders' });
+```
+
 ## Testing
 
 ```typescript
