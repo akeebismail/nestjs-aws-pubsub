@@ -175,9 +175,18 @@ describe('PubSubClient', () => {
             },
           },
           id: expect.any(String),
+          groupId: expect.any(String),
+          deduplicationId: expect.any(String),
         }),
         3 // maxRetries
       );
+      const sent = mockProducer.send.mock.calls[0][0] as {
+        id: string;
+        groupId?: string;
+        deduplicationId?: string;
+      };
+      expect(sent.id).toBe(sent.groupId);
+      expect(sent.id).toBe(sent.deduplicationId);
     });
 
     it('should send message to SNS producer successfully', async () => {

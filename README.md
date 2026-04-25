@@ -93,6 +93,8 @@ export class OrdersService {
 }
 ```
 
+**SQS FIFO:** For `.fifo` queues, AWS requires a deduplication id unless the queue has **content-based deduplication** enabled. `PubSubClient` sets `MessageGroupId` and `MessageDeduplicationId` from the same per-message id so sends succeed without extra options.
+
 ### 3. Async Configuration (Environment-based)
 
 ```typescript
