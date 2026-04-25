@@ -87,14 +87,3 @@ export interface Message {
     delaySeconds?: number;
     messageAttributes?: Record<string, MessageAttributeValue>;
 }
-
-export interface PubSubModuleOptionsFactory {
-    createOptions(): Promise<PubSubOptions> | PubSubOptions;
-}
-
-export interface PubSubModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
-    useExisting?: Type<PubSubModuleOptionsFactory>;
-    useClass?: Type<PubSubModuleOptionsFactory>;
-    useFactory?: (...args: any[]) => Promise<PubSubOptions> | PubSubOptions;
-    inject?: any[];
-}
