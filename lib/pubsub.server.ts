@@ -1,10 +1,10 @@
 import {IncomingRequest, OutgoingResponse, Server} from "@nestjs/microservices";
 import {PubSubEvents} from "./pubsub.events";
 import {Logger} from "@nestjs/common";
-import {Producer} from "sqs-producer/dist/esm";
 import {QueueName, PubSubConsumerMapValues, PubSubOptions} from "./pubsub.interface";
+import type { Message } from "@aws-sdk/client-sqs";
 import {Consumer} from "sqs-consumer";
-import {Message} from "sqs-producer";
+import type {Producer as SqsProducerClient} from "sqs-producer";
 import {NO_MESSAGE_HANDLER} from "@nestjs/microservices/constants";
 import {PubSubContext} from "./pubsub.context";
 import { Reflector } from '@nestjs/core';
@@ -15,10 +15,9 @@ export class PubSubServer extends Server<PubSubEvents>{
     protected logger = new Logger(PubSubServer.name)
     private readonly maxRetries = 3; // Number of retry attempts for sending messages
     private readonly retryDelay = 1000; // Delay between retry attempts in milliseconds
-    private client: Producer;
     private replyQueueName?: string;
     public readonly consumers = new Map<QueueName, PubSubConsumerMapValues>();
-    public readonly producers = new Map<QueueName, Producer>();
+    public readonly producers = new Map<QueueName, SqsProducerClient>();
     protected pendingEventListeners: Array<{
         name: string;
         event: keyof PubSubEvents;
@@ -189,19 +188,21 @@ export class PubSubServer extends Server<PubSubEvents>{
                         ...option,
                         messageAttributeNames: ['All'], // Request all message attributes from SQS
                         // queueUrl: name, // Uncomment and use if your PubSubConsumerOptions expects queueUrl
-                        handleMessage: async (message) => {
+                        handleMessage: async (message: Message): Promise<Message | undefined> => {
                             try {
                                 await this.handleMessage(message);
                             } catch (error) {
                                 this.logger.error('Error handling message:', error);
                             }
+                            return undefined;
                         },
-                        handleMessageBatch: async (messages) => {
+                        handleMessageBatch: async (messages: Message[]): Promise<Message[] | undefined> => {
                             try {
                                 await this.handleMessageBatch(messages);
                             } catch (error) {
                                 this.logger.error('Error handling message batch:', error);
                             }
+                            return undefined;
                         },
                     });
                     // Attach any pending event listeners for this consumer
