@@ -10,6 +10,7 @@ jest.mock('@nestjs/common', () => ({
   Logger: jest.fn().mockImplementation(() => ({
     log: jest.fn(),
     error: jest.fn(),
+    debug: jest.fn(),
   })),
 }));
 

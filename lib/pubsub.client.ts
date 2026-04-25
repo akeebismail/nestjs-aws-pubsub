@@ -148,10 +148,9 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
      * @returns The formatted SQS message.
      */
     private createMessage(serializedPacket: any, packet: any): Message {
-        // Debug logging to see what's being created
-        this.logger.log(`Creating SQS message with packet: ${JSON.stringify(packet)}`);
-        this.logger.log(`Serialized packet: ${JSON.stringify(serializedPacket)}`);
-        
+        this.logger.debug(
+            `createMessage pattern=${packet.pattern} id=${packet.id}`,
+        );
         const message = {
             body: JSON.stringify(serializedPacket.data),
             groupId: packet.id,
@@ -167,8 +166,6 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
             },
             id: packet.id,
         };
-        
-        this.logger.log(`Created SQS message: ${JSON.stringify(message)}`);
         return message;
     }
 

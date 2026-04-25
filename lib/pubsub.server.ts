@@ -15,7 +15,6 @@ export class PubSubServer extends Server<PubSubEvents>{
     protected logger = new Logger(PubSubServer.name)
     private readonly maxRetries = 3; // Number of retry attempts for sending messages
     private readonly retryDelay = 1000; // Delay between retry attempts in milliseconds
-    private replyQueueName?: string;
     public readonly consumers = new Map<QueueName, PubSubConsumerMapValues>();
     public readonly producers = new Map<QueueName, SqsProducerClient>();
     protected pendingEventListeners: Array<{
@@ -56,17 +55,9 @@ export class PubSubServer extends Server<PubSubEvents>{
         
         // Group messages by pattern
         for (const message of messages) {
-            // Debug logging to see what messages are being received
-            this.logger.log(`Processing message: ${JSON.stringify({
-                id: message.id || message.Id || message.MessageId,
-                body: message.body || message.Body,
-                messageAttributes: message.messageAttributes || message.MessageAttributes,
-                // Add more detailed logging for messageAttributes
-                hasMessageAttributes: !!(message.messageAttributes || message.MessageAttributes),
-                messageAttributesKeys: message.messageAttributes ? Object.keys(message.messageAttributes) : 
-                                    message.MessageAttributes ? Object.keys(message.MessageAttributes) : [],
-            }, null, 2)}`);
-            
+            this.logger.debug(
+                `handleMessageBatch item id=${message.id || message.Id || message.MessageId}`,
+            );
             // Handle both 'body' and 'Body' property names
             const body = message.body || message.Body;
             const messageAttributes = message.messageAttributes || message.MessageAttributes;
