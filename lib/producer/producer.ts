@@ -1,8 +1,5 @@
 import {
     SQSClient,
-    type SendMessageBatchResultEntry,
-    SendMessageBatchRequestEntry,
-    SendMessageBatchCommand,
     SendMessageCommand,
 } from "@aws-sdk/client-sqs";
 import {
@@ -18,37 +15,47 @@ import {FailedBatchMessagesError} from "./error";
 import {Logger} from "@nestjs/common";
 
 export class Producer {
-    private batchSize: number;
+    private readonly batchSize = 10;
     private sqs: SQSClient;
     private sns: SNSClient;
     protected readonly logger =  new Logger(Producer.name)
     private readonly maxRetries = 3; // Number of retry attempts for sending messages
 
     constructor(protected options: ProducerOptions, config: PubSubProducerConfig,) {
-        //this.validate(options);
         this.setup(options,config)
     }
 
     private setup(option: ProducerOptions, config: PubSubProducerConfig, ) {
-        if (option.type == 'sqs') {
-            this.sqs = option.sqs || option.sqsConfig ? new SQSClient(option.sqsConfig) : new SQSClient({
-                endpoint: config.endpoint || undefined,
-                region: config.region,
-                credentials: {
-                    secretAccessKey: config.secretKey,
-                    accessKeyId: config.accessKey,
-                },
-            })
-        }
-        if (option.type == 'sns') {
-            this.sns = option.sns || option.snsConfig ? new SNSClient(option.snsConfig) : new SNSClient({
-                endpoint: config.endpoint || undefined,
-                region: config.region,
-                credentials: {
-                    secretAccessKey: config.secretKey,
-                    accessKeyId: config.accessKey,
-                },
-            })
+        if (option.type === 'sqs') {
+            if (option.sqs) {
+                this.sqs = option.sqs;
+            } else if (option.sqsConfig) {
+                this.sqs = new SQSClient(option.sqsConfig);
+            } else {
+                this.sqs = new SQSClient({
+                    endpoint: config.endpoint || undefined,
+                    region: config.region,
+                    credentials: {
+                        secretAccessKey: config.secretKey,
+                        accessKeyId: config.accessKey,
+                    },
+                });
+            }
+        } else if (option.type === 'sns') {
+            if (option.sns) {
+                this.sns = option.sns;
+            } else if (option.snsConfig) {
+                this.sns = new SNSClient(option.snsConfig);
+            } else {
+                this.sns = new SNSClient({
+                    endpoint: config.endpoint || undefined,
+                    region: config.region,
+                    credentials: {
+                        secretAccessKey: config.secretKey,
+                        accessKeyId: config.accessKey,
+                    },
+                });
+            }
         }
     }
 
@@ -85,44 +92,6 @@ export class Producer {
             );
             return this.publishSnsWithRetry(topicArn, data, retries - 1);
         }
-    }
-
-    private async sendSQSBatch(
-        queueUrl: string,
-        failedMessages?: string[],
-        successfulMessages?: SendMessageBatchResultEntry[],
-        messages?: SendMessageBatchRequestEntry[],
-        startIndex?: number,
-    ): Promise<SendMessageBatchResultEntry[]>  {
-        const endIndex = startIndex + this.batchSize;
-        const batch = messages.slice(startIndex, endIndex);
-
-        const command = new SendMessageBatchCommand({
-            QueueUrl: queueUrl,
-            Entries: batch,
-        });
-        const result = await this.sqs.send(command);
-        const failedMessagesBatch = failedMessages.concat(
-            result?.Failed?.map((entry) => entry.Id) || [],
-        );
-        const successfulMessagesBatch = successfulMessages.concat(
-            result?.Successful || [],
-        );
-
-        if (endIndex < messages.length) {
-            return this.sendSQSBatch(
-                queueUrl,
-                failedMessagesBatch,
-                successfulMessagesBatch,
-                messages,
-                endIndex,
-            );
-        }
-
-        if (failedMessagesBatch.length === 0) {
-            return successfulMessagesBatch;
-        }
-        throw new FailedBatchMessagesError(failedMessagesBatch);
     }
 
     private async sendSNSBatch(
@@ -204,33 +173,6 @@ export class Producer {
         }
     }
 
-    private sendMessage(queueUrl: string, message: Message | Message[], retries: number,): Promise<any> {
-        const failedMessages: any = [];
-        const successfulMessages: any = [];
-        const startIndex = 0;
-        const messages = !Array.isArray(message) ? [message] : message;
-        try {
-
-            const batches = messages.map((message) => ({
-                Id: message.id,
-                MessageBody: message.body,
-                MessageAttributes: message.messageAttributes,
-                MessageGroupId: message.groupId,
-                MessageDeduplicationId: message.deduplicationId,
-                DelaySeconds: message.delaySeconds,
-            }));
-            return this.sendSQSBatch(queueUrl, failedMessages, successfulMessages, batches, startIndex);
-        } catch (e) {
-            if (e instanceof FailedBatchMessagesError) {
-                //batch error
-                throw e;
-            }
-            if (retries <= 0) {
-                return this.sendMessage(queueUrl, message, retries - 1);
-            }
-        }
-    }
-
     private publicMessage(topicArn: string, message: Message | Message[], retries: number,): Promise<any> {
         const failedMessages: any = [];
         const successfulMessages: any = [];
@@ -247,9 +189,10 @@ export class Producer {
             if (e instanceof FailedBatchMessagesError) {
                 throw e;
             }
-            if (retries <=0) {
-                return this.sendMessage(topicArn, message, retries - 1);
+            if (retries > 0) {
+                return this.publicMessage(topicArn, message, retries - 1);
             }
+            throw e;
         }
     }
 }
