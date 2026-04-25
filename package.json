@@ -1,6 +1,6 @@
 {
-  "name": "fastfast-pubsub",
-  "version": "1.0.11",
+  "name": "nestjs-aws-pubsub",
+  "version": "0.0.1",
   "description": "NestJS microservice transport for AWS SQS and SNS with pub/sub patterns, featuring message acknowledgment, batch processing, retry logic, and SNS fan-out support.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +11,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vervana-io/fastfast-pubsub.git"
+    "url": "https://github.com/akeebismail/nestjs-aws-pubsub.git"
   },
   "scripts": {
     "build": "tsc",
@@ -36,19 +36,20 @@
   "author": "Akeeb Ismail",
   "license": "ISC",
   "devDependencies": {
-    "@nestjs/testing": "^11.1.5",
+    "@nestjs/testing": "^11.1.19",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.1.0",
-    "jest": "^30.0.5",
-    "ts-jest": "^29.4.0",
+    "@types/node": "^25.6.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@aws-sdk/client-sns": "^3.826.0",
-    "@aws-sdk/client-sqs": "^3.826.0",
-    "sqs-consumer": "^12.0.0",
-    "sqs-producer": "^7.0.0"
+    "@aws-sdk/client-sns": "^3.1037.0",
+    "@aws-sdk/client-sqs": "^3.1037.0",
+    "@nestjs/mapped-types": "*",
+    "sqs-consumer": "^14.2.8",
+    "sqs-producer": "^8.0.9"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.1.6",
