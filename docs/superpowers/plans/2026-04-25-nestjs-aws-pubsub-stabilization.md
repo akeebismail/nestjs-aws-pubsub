@@ -8,22 +8,54 @@
 
 **Tech stack:** TypeScript, NestJS 11 (`@nestjs/common`, `@nestjs/microservices`, `@nestjs/core`), AWS SDK v3 (SNS/SQS), `sqs-consumer` 14.x, Jest, ts-jest 29.
 
+### Spec traceability (100%)
+
+**Primary source:** `docs/superpowers/specs/2026-04-25-nestjs-aws-pubsub-library-review-design.md` (F-01–F-17, §2.4, §5, §6, §7 P0–P3).
+
+| Finding or spec anchor | Plan |
+|------------------------|------|
+| **F-01** | Task 5 |
+| **F-02** (code) | Task 2 |
+| **F-02** (§5 / README API) | Task 2 Step 5 |
+| **F-03** | Task 3 Step 3 |
+| **F-04** | Task 3 Steps 1–2 |
+| **F-05** | Task 3 Step 4 |
+| **F-06** | Task 3 Step 4 |
+| **F-07** (remove dead SQS batch path) | Task 3 Step 7 |
+| **F-08** | Task 1 Steps 1–2 |
+| **F-09** | Task 11 Step 2 (optional rethrow) + Task 11 Step 1a (README: current swallow + visibility) |
+| **F-10** | Task 4 Step 1 |
+| **F-11** (README) | Task 4 Step 2 |
+| **F-11** (`PubSubServer.sendMessage` in code) | Task 4 Step 4 |
+| **F-12** | Task 6 |
+| **F-13** | Task 7 |
+| **F-14** | Task 9 |
+| **F-15** | Task 10 |
+| **F-16** | Task 8 |
+| **F-17** (README) | Task 11 Step 1 |
+| **F-17** (`PubSubContext` JSDoc) | Task 11 Step 3 |
+| **§5** “Batch processing” row (verify shape vs tests) | Task 1 Step 3 |
+| **§5** “`unwrap`” row | Task 2 Step 5 |
+| **§2.4** / **§6** quality gate | Task 12 |
+| **§6** E2E optional | Task 12 Step 2 |
+| **P0–P3** | Same tasks as in spec §7 table (this matrix maps 1:1) |
+
 ---
 
 ## File map (create / touch)
 
 | File | Responsibility after work |
 |------|----------------------------|
-| `lib/pubsub.server.ts` | P0: Consumer callbacks return `Promise<Message \| undefined>` and `Promise<Message[] \| undefined>`; optional explicit `return` paths; F-12 log noise; F-15 `replyQueueName` removal if unused. |
-| `lib/pubsub.client.ts` | P0: `unwrap` returns producer map; F-12 noisy logs. |
+| `lib/pubsub.server.ts` | P0: Consumer callbacks (F-08); F-11 JSDoc on `sendMessage`; F-12 log noise; F-15 `replyQueueName` removal if unused. |
+| `lib/pubsub.client.ts` | P0: `unwrap` (F-02); F-12 noisy logs. |
 | `lib/pubsub.interface.ts` | P2: remove duplicate `PubSubModuleOptionsFactory` / `PubSubModuleAsyncOptions`. |
-| `lib/producer/producer.ts` | P1: SQS/SNS `setup` precedence, `batchSize` init, SNS `publicMessage` catch, private SQS `sendMessage` retry, optional dead-code decision for batch helpers (F-07). |
+| `lib/producer/producer.ts` | P1: SQS/SNS `setup` (F-04), `batchSize` (F-03), SNS `publicMessage` catch (F-05), private SQS batch retry (F-06), remove dead SQS batch path (F-07, Task 3 Step 7). |
 | `lib/pubsub.context.ts` | P3: JSDoc for nack/ops (F-17) only. |
 | `lib/pubsub.decorator.ts` | P2: JSDoc; optional metadata test. |
 | `lib/pubsub.server.spec.ts` | P0: still passes after server changes. |
 | `lib/pubsub.client.spec.ts` | P0: test `unwrap` returns `Map` of producers. |
 | `lib/pubsub.decorator.spec.ts` | P2 (new): `PubSubMessagePattern` applies metadata. |
-| `README.md` | P1: bootstrap without invalid `get(PubSubServer)`; F-11 reply limitations; F-17 nack/DLQ. |
+| `README.md` | P1: `get(PubSubServer)` (F-10), reply (F-11), `unwrap` in API (F-02 §5), nack/DLQ (F-17), optional F-09. |
 | `package.json` | P2: `clean` script targets `dist/`. |
 | `jest.config.ts` | P2: move ts-jest options out of `globals` (F-13). |
 | `test/sqs.e2e-spec.ts` | Optional: run when AWS/localstack available (document skip). |
@@ -36,8 +68,9 @@
 
 **Files:**
 
-- Modify: `lib/pubsub.server.ts` (import `Message` from `sqs-consumer`; `Consumer.create` handler bodies)
-- Test: `npm test` / `npx tsc -p . --noEmit` (project compiles; `include` is `lib/**/*` only, so tsc on package root uses `tsconfig` as configured)
+- Modify: `lib/pubsub.server.ts` (import `Message` from `sqs-consumer`; `Consumer.create` handler bodies; batch path only if Step 3 test fails)
+- Test: `lib/pubsub.server.spec.ts` (Step 3: `true batch` test; no file edit if already green)
+- Commands: `npm test` / `npx tsc -p . --noEmit` (project compiles; `include` is `lib/**/*` only)
 
 - [ ] **Step 1: Add `Message` import and explicit return in consumer callbacks**
 
@@ -82,23 +115,40 @@ npm test
 
 Expected: `npx tsc` passes (or only pre-existing non-server errors, but server file must be clean). `pubsub.server.ts` compiles. `pubsub.server.spec.ts` suite runs to completion. If `tsc` reports issues because `include` is only `lib/`, run `npm run build` as an alternative (uses same `tsconfig`).
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Verify spec §5 “Batch processing” contract (F-08 + `pubsub.server.spec.ts`)**
+
+Spec row: handlers with `@PubSubMessagePattern(..., { batch: true })` receive a **grouped array**; see design spec **§5** and **§4** F-14.
+
+Run only the multi-message batch test:
+
+```bash
+npx jest lib/pubsub.server.spec.ts -t "true batch" -v
+```
+
+Expected: **PASS** — `mockBatchHandler` is called with `expect.arrayContaining([ { data, context: PubSubContext }, ... ])` per existing assertions in `lib/pubsub.server.spec.ts` (lines ~125–130). If this test fails after Step 1, fix `handleMessageBatch` in `lib/pubsub.server.ts` so the `batch: true` branch calls `await handler(batch)` with `batch: Array<{ data: any; context: PubSubContext }>` and re-run this step.
+
+- [ ] **Step 4: Commit** (amend message if Step 1–3 are one logical change, or keep two commits: F-08 types first, then batch test fix if any)
 
 ```bash
 git add lib/pubsub.server.ts
 git commit -m "fix(server): align sqs-consumer v14 handleMessage return types (F-08)"
 ```
 
+If you changed batch behavior in the same work, use:
+
+`git commit -m "fix(server): sqs-consumer v14 return types and batch handler contract (F-08, §5)"`
+
 ---
 
 ## Task 2: P0 / F-02 — `PubSubClient.unwrap` returns producers
 
-**Spec:** P0, F-02.
+**Spec:** P0, F-02; spec §5 “`unwrap`” row.
 
 **Files:**
 
 - Modify: `lib/pubsub.client.ts` (method `unwrap`)
 - Modify: `lib/pubsub.client.spec.ts` (new or extended test)
+- Modify: `README.md` (Step 5: document `unwrap` in PubSubClient API)
 
 - [ ] **Step 1: Write failing test first (TDD)**
 
@@ -144,11 +194,33 @@ npm test
 
 Expected: PASS, full `npm test` green.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Commit (unwrap implementation + test)**
 
 ```bash
 git add lib/pubsub.client.ts lib/pubsub.client.spec.ts
 git commit -m "fix(client): make unwrap return producers map (F-02)"
+```
+
+- [ ] **Step 5: README — spec §5 `unwrap` row (F-02 documentation)**
+
+In `README.md`, in the **PubSubClient** API block (the `class PubSubClient` fenced section under “### PubSubClient”, ~line 406), add two lines so published API matches code:
+
+```typescript
+  // Introspection: map of named Producer instances (same as internal storage)
+  unwrap<T = Map<string, import('./producer/producer').Producer>>(): T;
+```
+
+If you prefer to avoid `import` in a doc snippet, use plain text instead:
+
+- `unwrap()` — returns the `Map` of `Producer` instances keyed by the `name` from config (introspection / debugging).
+
+Run: no build required; optional `npm test` unchanged.
+
+- [ ] **Step 6: Commit (README only)**
+
+```bash
+git add README.md
+git commit -m "docs(readme): document PubSubClient.unwrap (F-02, §5)"
 ```
 
 ---
@@ -238,27 +310,49 @@ throw e;
 
 In private `sendMessage` (SQS batch), in the `catch` block, replace the `retries <= 0` branch: **throw** `e` on terminal failure instead of `return this.sendMessage(..., retries - 1)` with a negative `retries`.
 
-- [ ] **Step 5: F-07 dead code — minimum documentation**
+- [ ] **Step 5: F-07 — confirm no callers of private SQS batch `sendMessage`**
 
-Add a one-line file-level or method-level comment above the **private** batch SQS `sendMessage` and related batch helpers: “Not used by public `send` in current build; keep for future batching or remove in a breaking cleanup.” (Do not delete in this pass unless a grep proves zero references; if unused, a follow-up commit can delete.)
+`public send()` in `lib/producer/producer.ts` must only call `sendMessageWithRetry` (SQS) and `publicMessage` (SNS). Verify with:
 
-- [ ] **Step 6: Run tests and commit**
+```bash
+grep -n "private sendMessage\|sendSQSBatch\|public send" lib/producer/producer.ts
+```
+
+Expected: The **only** call to `sendSQSBatch` is from `private sendMessage` (SQS batch). The **only** SQS path from `public send` is `sendMessageWithRetry`. No other file imports `private sendMessage`.
+
+- [ ] **Step 6: F-07 — remove dead SQS batch path (spec: “or remove dead paths”)**
+
+Delete from `lib/producer/producer.ts` the **private** method `sendMessage` (SQS batch, the one taking `queueUrl, message, retries` — not `sendMessageWithRetry`) in full, and delete **`sendSQSBatch`** in full, because they are only referenced by each other and not by `public send`.
+
+**Do not delete** `sendSNSBatch` (used from `publicMessage`).
+
+After deletion, run:
+
+```bash
+npm test
+npx tsc -p . --noEmit
+```
+
+If anything fails, restore and stop — but with current `public send`, this removal is the intended F-07 resolution.
+
+- [ ] **Step 7: Run tests and commit (producer: F-03..F-07)**
 
 ```bash
 npm test
 git add lib/producer/producer.ts lib/producer/producer.spec.ts
-git commit -m "fix(producer): client setup precedence, batch size, and SNS catch retry (F-03 to F-07)"
+git commit -m "fix(producer): client setup, batch size, SNS catch, remove dead SQS batch (F-03 to F-07)"
 ```
 
 ---
 
-## Task 4: P1 / F-10, F-11, §5 — README accuracy (server bootstrap + reply semantics)
+## Task 4: P1 / F-10, F-11, §5 — README accuracy (server bootstrap + reply semantics) + F-11 in code
 
-**Spec:** P1, F-10, F-11, §5.
+**Spec:** P1, F-10, F-11, §5, design spec **§4** table row for `sendMessage` on server.
 
 **Files:**
 
 - Modify: `README.md`
+- Modify: `lib/pubsub.server.ts` (F-11: JSDoc on `sendMessage` only; no new transport in this plan)
 
 - [ ] **Step 1: Fix server bootstrap (remove invalid `get(PubSubServer)`)**
 
@@ -280,11 +374,38 @@ server.on('message_received', (m) => { /* ... */ });
 
 In “Server-Side Configuration” or a short “Request / reply” subsection, state: **Outgoing `send` / reply over SQS is not implemented;** `PubSubContext` and consume-side handlers are event-style only; do not assume request/response. Remove or rewrite any prose that suggests microservice `send` returns data over the wire.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Commit (README: F-10, F-11 text)**
 
 ```bash
 git add README.md
 git commit -m "docs(readme): correct PubSubServer usage and document no reply transport (F-10, F-11)"
+```
+
+- [ ] **Step 4: F-11 in-source — JSDoc on `PubSubServer.sendMessage`**
+
+In `lib/pubsub.server.ts`, directly above the method `async sendMessage<T = any>(...)` (currently ~line 341), add:
+
+```typescript
+/**
+ * Not a transport reply. Serializes a Nest `OutgoingResponse` and logs; does not publish to SQS/SNS.
+ * @see F-11 in `docs/superpowers/specs/2026-04-25-nestjs-aws-pubsub-library-review-design.md`
+ */
+```
+
+(Adjust line breaks to match your formatter.) No change to method body in this plan — spec chose **clarify**, not **implement** reply.
+
+Run:
+
+```bash
+npm test
+npx tsc -p . --noEmit
+```
+
+- [ ] **Step 5: Commit (F-11 code doc)**
+
+```bash
+git add lib/pubsub.server.ts
+git commit -m "docs(server): JSDoc on sendMessage — no SQS/SNS reply transport (F-11)"
 ```
 
 ---
@@ -435,9 +556,8 @@ git commit -m "chore: fix clean script to target dist/ (F-16)"
 - [ ] **Step 2: New test file** `lib/pubsub.decorator.spec.ts`:
 
 ```typescript
-import { PUBSUB_HANDLER_OPTIONS } from './pubsub.decorator';
 import { Reflector } from '@nestjs/core';
-import { PubSubMessagePattern } from './pubsub.decorator';
+import { PUBSUB_HANDLER_OPTIONS, PubSubMessagePattern } from './pubsub.decorator';
 
 describe('PubSubMessagePattern', () => {
   class TestController {
@@ -496,9 +616,11 @@ git commit -m "chore: remove unused replyQueueName placeholders (F-15)"
 - Modify: `README.md` (F-17, optional F-09)
 - Optional modify: `lib/pubsub.server.ts` (F-09 only if you document “rethrow to consumer” in same commit)
 
-- [ ] **Step 1: README subsection “Ack / nack / visibility”** explaining that `nack()` is visibility-timeout retry, operators should use DLQ/redrive policies; link to AWS docs in one line.
+- [ ] **Step 1a: README subsection “Ack / nack / visibility” (F-17)** — one short subsection stating: `nack()` is effectively visibility-timeout retry; operators configure DLQ / redrive on the queue. Link: `https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html` (or current AWS doc for DLQ).
 
-- [ ] **Step 2: Optional F-09** — in `Consumer.create` wrappers, rethrow `error` after `logger.error` if you want queue retry on handler failure (behavior change). If you do, add a “Breaking: …” line in the commit message and a README note. If in doubt, **only document** current swallow behavior for this task.
+- [ ] **Step 1b: README paragraph “Consumer errors and retries” (F-09)** — document **current** behavior: `Consumer.create` handlers in `PubSubServer` wrap `handleMessage` in `try/catch` and log errors, so unhandled **sync/async** throw inside user handlers is caught; combined with return `undefined` to `sqs-consumer` (see Task 1), visibility timeout drives redelivery. State explicitly that this may differ from “fail fast to DLQ” expectations, and that changing to **rethrow** is optional (see Step 2).
+
+- [ ] **Step 2: Optional F-09 (code)** — in `Consumer.create` wrappers, rethrow `error` after `logger.error` if you want SQS to redeliver without relying on the catch swallow (behavior change). If you do, add “Breaking: …” in the commit and update Step 1b. If in doubt, **skip rethrow** and only ship README 1a/1b + context JSDoc.
 
 - [ ] **Step 3: JSDoc on `PubSubContext` methods** in `lib/pubsub.context.ts` (nack, ack) clarifying SQS behavior.
 
@@ -506,7 +628,8 @@ git commit -m "chore: remove unused replyQueueName placeholders (F-15)"
 
 ```bash
 git add README.md lib/pubsub.context.ts
-git commit -m "docs: operator guidance for nack, visibility, and DLQ (F-17); optional F-09 note"
+# If and only if Step 2 rethrow: also `git add lib/pubsub.server.ts`
+git commit -m "docs: nack, visibility, DLQ (F-17); consumer error behavior (F-09); context JSDoc"
 ```
 
 ---
@@ -530,11 +653,11 @@ npx tsc -p . --noEmit
 
 ---
 
-## Plan self-review
+## Plan self-review (post–100% traceability pass)
 
-1. **Spec coverage:** P0 (F-08, F-02) → Task 1–2. P1 producer + README → 3–4. P2 (F-01, F-12, F-13, F-16, F-14) → 5–9. P3 (F-15, F-09, F-17) → 10–11. F-11 in README Task 4; **no** full SQS reply implementation (per spec ambiguity resolution). F-10 README Task 4.
-2. **Placeholder scan:** No `TBD` / `TODO` steps; Task 3 includes concrete `setup` tests before implementation changes.
-3. **Type/signature consistency:** `unwrap` uses `Map<QueueName, Producer>`; `Message` is imported from `sqs-consumer` in `pubsub.server.ts` for consumer callback parameters.
+1. **Spec coverage:** The **“Spec traceability (100%)”** matrix at the top maps every F-01–F-17, §2.4, §5, §6, §7 item to a task and step. Exceptions: (a) spec **§2.1** “durable review record” describes the design doc, not this implementation plan; (b) spec **§3** architecture is descriptive—no build task. **F-11** is fully covered: README (Task 4) + JSDoc on `sendMessage` (Task 4 Step 4). **F-07** is fully covered: removal in Task 3 Step 6, not only a comment. **F-02** is fully covered: code+test (Task 2) + README (Task 2 Step 5). **§5 batch** is Task 1 Step 3. **F-09** is Task 11 Steps 1b + 2. No full SQS **reply** implementation (per spec).
+2. **Placeholder scan:** No `TBD` / `TODO` steps; Task 3 includes concrete `setup` tests before `setup` rewrite.
+3. **Type/signature consistency:** `unwrap` uses `Map<QueueName, Producer>`; `Message` is imported from `sqs-consumer` in `pubsub.server.ts` for consumer callback parameters. Task 2 Step 5 README `unwrap` lines match Task 2 Step 2 implementation.
 
 ---
 
