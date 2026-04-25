@@ -729,6 +729,8 @@ await client.sendMessage('order_created', data, { name: 'orders' });
 
 ## Testing
 
+End-to-end tests in `test/sqs.e2e-spec.ts` need real AWS (or LocalStack) credentials and are **not** run by default in CI. Run them manually when your environment is configured.
+
 ```typescript
 // In your test files
 import { Test, TestingModule } from '@nestjs/testing';
