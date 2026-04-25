@@ -133,7 +133,12 @@ describe('PubSubClient', () => {
                     },
                 },
                 id: expect.any(String),
+                groupId: expect.any(String),
+                deduplicationId: expect.any(String),
             }), 3);
+            const sent = mockProducer.send.mock.calls[0][0];
+            expect(sent.id).toBe(sent.groupId);
+            expect(sent.id).toBe(sent.deduplicationId);
         });
         it('should send message to SNS producer successfully', async () => {
             const pattern = 'notification_sent';

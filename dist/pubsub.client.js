@@ -92,6 +92,7 @@ class PubSubClient extends microservices_1.ClientProxy {
         const message = {
             body: JSON.stringify(serializedPacket.data),
             groupId: packet.id,
+            deduplicationId: packet.id,
             messageAttributes: {
                 pattern: {
                     DataType: 'String',
