@@ -10,8 +10,6 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
     protected readonly logger =  new Logger(PubSubClient.name)
     private readonly maxRetries = 3; // Number of retry attempts for sending messages
     private readonly retryDelay = 1000; // Delay between retry attempts in milliseconds
-    private client: any; // Keep for compatibility
-    private replyQueueName?: string;
     public readonly producers = new Map<QueueName, Producer>();
 
     constructor(protected options : PubSubOptions) {
@@ -41,10 +39,6 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
         
         const producerNames = Array.from(this.producers.keys());
         this.logger.log(`Available producers: ${producerNames.join(', ')}`);
-
-        if (this.replyQueueName) {
-
-        }
     }
 
     // Implement the abstract publish method from ClientProxy as a stub
@@ -59,11 +53,8 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
         this.producers.clear();
     }
 
-    public unwrap<T>(): T {
-        if (!this.client) {
-            throw new Error('Client is not initialized');
-        }
-        return this.client as T;
+    public unwrap<T = Map<QueueName, Producer>>(): T {
+        return this.producers as T;
     }
 
     /**
@@ -157,10 +148,9 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
      * @returns The formatted SQS message.
      */
     private createMessage(serializedPacket: any, packet: any): Message {
-        // Debug logging to see what's being created
-        this.logger.log(`Creating SQS message with packet: ${JSON.stringify(packet)}`);
-        this.logger.log(`Serialized packet: ${JSON.stringify(serializedPacket)}`);
-        
+        this.logger.debug(
+            `createMessage pattern=${packet.pattern} id=${packet.id}`,
+        );
         const message = {
             body: JSON.stringify(serializedPacket.data),
             groupId: packet.id,
@@ -176,8 +166,6 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
             },
             id: packet.id,
         };
-        
-        this.logger.log(`Created SQS message: ${JSON.stringify(message)}`);
         return message;
     }
 

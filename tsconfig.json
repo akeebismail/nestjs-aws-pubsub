@@ -13,8 +13,7 @@
     "rootDir": "./lib",
     "skipLibCheck": true,
     "strictNullChecks": false,
-    "types": ["node", "jest"],
-    "moduleResolution": "node"
+    "types": ["node", "jest"]
   },
   "include": [
     "lib/**/*"

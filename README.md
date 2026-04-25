@@ -168,42 +168,38 @@ import { AppModule } from './app.module';
 import { PubSubServer } from 'nestjs-aws-pubsub';
 
 async function bootstrap() {
-  const app = await NestFactory.createMicroservice(AppModule, {
-    strategy: new PubSubServer({
-        // Consumer configurations
-        consumers: [
-          {
-            name: 'orders-queue',
-            queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/orders-queue',
-            region: 'us-east-1',
-          },
-          {
-            name: 'notifications-queue',
-            queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/notifications-queue',
-            region: 'us-east-1',
-          },
-        ],
-        
-        // Serialization
-        serializer: { serialize: (value: any) => value },
-        deserializer: { deserialize: (value: any) => value },
-        
-        // Environment scoping (optional)
-        scopedEnvKey: 'PROD',
-      }),
+  const server = new PubSubServer({
+    consumers: [
+      {
+        name: 'orders-queue',
+        queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/orders-queue',
+        region: 'us-east-1',
+      },
+      {
+        name: 'notifications-queue',
+        queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/notifications-queue',
+        region: 'us-east-1',
+      },
+    ],
+    serializer: { serialize: (value: any) => value },
+    deserializer: { deserialize: (value: any) => value },
+    scopedEnvKey: 'PROD',
   });
 
-  // Listen to internal events for observability
-  const pubSubServer = app.get(PubSubServer);
-  pubSubServer.on('message_received', (message) => {
+  const app = await NestFactory.createMicroservice(AppModule, {
+    strategy: server,
+  });
+
+  // Use the same strategy instance (PubSubModule does not register PubSubServer in DI)
+  server.on('message_received', (message) => {
     console.log('Message received:', message.MessageId);
   });
 
-  pubSubServer.on('message_processed', (message) => {
+  server.on('message_processed', (message) => {
     console.log('Message processed:', message.MessageId);
   });
 
-  pubSubServer.on('processing_error', () => {
+  server.on('processing_error', () => {
     console.log('Error processing message');
   });
 
@@ -211,6 +207,12 @@ async function bootstrap() {
 }
 bootstrap();
 ```
+
+**Request / reply:** this transport is **event-style** (consume from SQS, handle, ack/nack). There is **no** implemented reply or request/response over SQS/SNS from the server; do not assume microservice `send` returns data to a caller over the wire.
+
+**Ack, nack, and visibility timeout:** `PubSubContext.nack()` is a no-op in this library; a failed or nacked path typically leaves the message to reappear after the [visibility timeout](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html). Use **dead-letter queues (DLQ)** and **redrive** policies for poison messages: [SQS dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html).
+
+**Consumer error handling:** `PubSubServer` registers `handleMessage` / `handleMessageBatch` with an inner `try/catch` that logs and does not rethrow. Unhandled errors in your handler are therefore caught at that layer; message retry still follows SQS visibility and your queue policy. If you need different behavior, fork or wrap the strategy.
 
 ### 2. Create Message Handlers
 
@@ -426,6 +428,9 @@ class PubSubClient extends ClientProxy {
 
   // Get available producers
   readonly producers: Map<string, Producer>;
+
+  // Introspection: same Map as `producers` (named producer instances)
+  unwrap<T = Map<string, Producer>>(): T;
 
   // Close connections
   close(): Promise<void>;
@@ -723,6 +728,8 @@ await client.sendMessage('order_created', data, { name: 'orders' });
 ```
 
 ## Testing
+
+End-to-end tests in `test/sqs.e2e-spec.ts` need real AWS (or LocalStack) credentials and are **not** run by default in CI. Run them manually when your environment is configured.
 
 ```typescript
 // In your test files

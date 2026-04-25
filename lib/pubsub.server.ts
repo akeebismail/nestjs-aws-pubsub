@@ -1,10 +1,10 @@
 import {IncomingRequest, OutgoingResponse, Server} from "@nestjs/microservices";
 import {PubSubEvents} from "./pubsub.events";
 import {Logger} from "@nestjs/common";
-import {Producer} from "sqs-producer/dist/esm";
 import {QueueName, PubSubConsumerMapValues, PubSubOptions} from "./pubsub.interface";
+import type { Message } from "@aws-sdk/client-sqs";
 import {Consumer} from "sqs-consumer";
-import {Message} from "sqs-producer";
+import type {Producer as SqsProducerClient} from "sqs-producer";
 import {NO_MESSAGE_HANDLER} from "@nestjs/microservices/constants";
 import {PubSubContext} from "./pubsub.context";
 import { Reflector } from '@nestjs/core';
@@ -15,10 +15,8 @@ export class PubSubServer extends Server<PubSubEvents>{
     protected logger = new Logger(PubSubServer.name)
     private readonly maxRetries = 3; // Number of retry attempts for sending messages
     private readonly retryDelay = 1000; // Delay between retry attempts in milliseconds
-    private client: Producer;
-    private replyQueueName?: string;
     public readonly consumers = new Map<QueueName, PubSubConsumerMapValues>();
-    public readonly producers = new Map<QueueName, Producer>();
+    public readonly producers = new Map<QueueName, SqsProducerClient>();
     protected pendingEventListeners: Array<{
         name: string;
         event: keyof PubSubEvents;
@@ -57,17 +55,9 @@ export class PubSubServer extends Server<PubSubEvents>{
         
         // Group messages by pattern
         for (const message of messages) {
-            // Debug logging to see what messages are being received
-            this.logger.log(`Processing message: ${JSON.stringify({
-                id: message.id || message.Id || message.MessageId,
-                body: message.body || message.Body,
-                messageAttributes: message.messageAttributes || message.MessageAttributes,
-                // Add more detailed logging for messageAttributes
-                hasMessageAttributes: !!(message.messageAttributes || message.MessageAttributes),
-                messageAttributesKeys: message.messageAttributes ? Object.keys(message.messageAttributes) : 
-                                    message.MessageAttributes ? Object.keys(message.MessageAttributes) : [],
-            }, null, 2)}`);
-            
+            this.logger.debug(
+                `handleMessageBatch item id=${message.id || message.Id || message.MessageId}`,
+            );
             // Handle both 'body' and 'Body' property names
             const body = message.body || message.Body;
             const messageAttributes = message.messageAttributes || message.MessageAttributes;
@@ -189,19 +179,21 @@ export class PubSubServer extends Server<PubSubEvents>{
                         ...option,
                         messageAttributeNames: ['All'], // Request all message attributes from SQS
                         // queueUrl: name, // Uncomment and use if your PubSubConsumerOptions expects queueUrl
-                        handleMessage: async (message) => {
+                        handleMessage: async (message: Message): Promise<Message | undefined> => {
                             try {
                                 await this.handleMessage(message);
                             } catch (error) {
                                 this.logger.error('Error handling message:', error);
                             }
+                            return undefined;
                         },
-                        handleMessageBatch: async (messages) => {
+                        handleMessageBatch: async (messages: Message[]): Promise<Message[] | undefined> => {
                             try {
                                 await this.handleMessageBatch(messages);
                             } catch (error) {
                                 this.logger.error('Error handling message batch:', error);
                             }
+                            return undefined;
                         },
                     });
                     // Attach any pending event listeners for this consumer
@@ -339,6 +331,10 @@ export class PubSubServer extends Server<PubSubEvents>{
         response$ && this.send(response$, publish);
     }
 
+    /**
+     * Not a transport reply: serializes a Nest `OutgoingResponse` and logs only.
+     * Does not publish to SQS or SNS. See design spec F-11.
+     */
     async sendMessage<T = any>( message: T, replyTo: string, id: string) {
         Object.assign(message, {id})
         const outGoingResponse = this.serializer.serialize(message as unknown as OutgoingResponse)

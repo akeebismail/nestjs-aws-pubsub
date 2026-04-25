@@ -21,9 +21,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build artifacts
-dist/
-build/
+# dist/ and build/ are NOT listed here: package.json "files" ships dist/; ignoring them
+# would empty the published tarball (see docs/superpowers/specs/2026-04-25-npm-public-publish-design.md).
 
 # Dependencies
 node_modules/

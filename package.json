@@ -1,6 +1,6 @@
 {
   "name": "nestjs-aws-pubsub",
-  "version": "0.0.1",
+  "version": "1.1.1",
   "description": "NestJS microservice transport for AWS SQS and SNS with pub/sub patterns, featuring message acknowledgment, batch processing, retry logic, and SNS fan-out support.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,7 +19,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "prepublishOnly": "npm run build",
-    "clean": "rm -rf lib/*.js lib/*.d.ts lib/*.js.map"
+    "clean": "rm -rf dist"
   },
   "keywords": [
     "nestjs",

@@ -15,16 +15,19 @@ export class PubSubContext<P = string> extends BaseRpcContext<PubSubContextArgs<
         return this.args[1];
     }
 
-    // Manual ack: delete the message from the queue
+    /**
+     * Ack: delete the message from the queue when the underlying SQS message exposes `deleteMessage` (e.g. sqs-consumer).
+     */
     async ack(): Promise<void> {
         if (typeof this.args[0].deleteMessage === 'function') {
             await this.args[0].deleteMessage();
         }
     }
 
-    // Manual nack: optionally change visibility or just do nothing (message will be retried)
+    /**
+     * Nack: default is a no-op. The message becomes visible again after the queue visibility timeout (redelivery).
+     * Configure **DLQ** and **redrive** on the queue for poison messages; see AWS SQS dead-letter queue docs.
+     */
     async nack(): Promise<void> {
-        // Optionally, you could call changeMessageVisibility here
-        // For now, do nothing and let SQS retry after visibility timeout
     }
 } 
