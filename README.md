@@ -210,6 +210,10 @@ bootstrap();
 
 **Request / reply:** this transport is **event-style** (consume from SQS, handle, ack/nack). There is **no** implemented reply or request/response over SQS/SNS from the server; do not assume microservice `send` returns data to a caller over the wire.
 
+**Ack, nack, and visibility timeout:** `PubSubContext.nack()` is a no-op in this library; a failed or nacked path typically leaves the message to reappear after the [visibility timeout](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html). Use **dead-letter queues (DLQ)** and **redrive** policies for poison messages: [SQS dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html).
+
+**Consumer error handling:** `PubSubServer` registers `handleMessage` / `handleMessageBatch` with an inner `try/catch` that logs and does not rethrow. Unhandled errors in your handler are therefore caught at that layer; message retry still follows SQS visibility and your queue policy. If you need different behavior, fork or wrap the strategy.
+
 ### 2. Create Message Handlers
 
 ```typescript
