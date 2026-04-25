@@ -340,6 +340,10 @@ export class PubSubServer extends Server<PubSubEvents>{
         response$ && this.send(response$, publish);
     }
 
+    /**
+     * Not a transport reply: serializes a Nest `OutgoingResponse` and logs only.
+     * Does not publish to SQS or SNS. See design spec F-11.
+     */
     async sendMessage<T = any>( message: T, replyTo: string, id: string) {
         Object.assign(message, {id})
         const outGoingResponse = this.serializer.serialize(message as unknown as OutgoingResponse)

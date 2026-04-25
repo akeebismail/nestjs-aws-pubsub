@@ -168,42 +168,38 @@ import { AppModule } from './app.module';
 import { PubSubServer } from 'nestjs-aws-pubsub';
 
 async function bootstrap() {
-  const app = await NestFactory.createMicroservice(AppModule, {
-    strategy: new PubSubServer({
-        // Consumer configurations
-        consumers: [
-          {
-            name: 'orders-queue',
-            queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/orders-queue',
-            region: 'us-east-1',
-          },
-          {
-            name: 'notifications-queue',
-            queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/notifications-queue',
-            region: 'us-east-1',
-          },
-        ],
-        
-        // Serialization
-        serializer: { serialize: (value: any) => value },
-        deserializer: { deserialize: (value: any) => value },
-        
-        // Environment scoping (optional)
-        scopedEnvKey: 'PROD',
-      }),
+  const server = new PubSubServer({
+    consumers: [
+      {
+        name: 'orders-queue',
+        queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/orders-queue',
+        region: 'us-east-1',
+      },
+      {
+        name: 'notifications-queue',
+        queueUrl: 'https://sqs.us-east-1.amazonaws.com/123456789012/notifications-queue',
+        region: 'us-east-1',
+      },
+    ],
+    serializer: { serialize: (value: any) => value },
+    deserializer: { deserialize: (value: any) => value },
+    scopedEnvKey: 'PROD',
   });
 
-  // Listen to internal events for observability
-  const pubSubServer = app.get(PubSubServer);
-  pubSubServer.on('message_received', (message) => {
+  const app = await NestFactory.createMicroservice(AppModule, {
+    strategy: server,
+  });
+
+  // Use the same strategy instance (PubSubModule does not register PubSubServer in DI)
+  server.on('message_received', (message) => {
     console.log('Message received:', message.MessageId);
   });
 
-  pubSubServer.on('message_processed', (message) => {
+  server.on('message_processed', (message) => {
     console.log('Message processed:', message.MessageId);
   });
 
-  pubSubServer.on('processing_error', () => {
+  server.on('processing_error', () => {
     console.log('Error processing message');
   });
 
@@ -211,6 +207,8 @@ async function bootstrap() {
 }
 bootstrap();
 ```
+
+**Request / reply:** this transport is **event-style** (consume from SQS, handle, ack/nack). There is **no** implemented reply or request/response over SQS/SNS from the server; do not assume microservice `send` returns data to a caller over the wire.
 
 ### 2. Create Message Handlers
 
