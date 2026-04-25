@@ -427,6 +427,9 @@ class PubSubClient extends ClientProxy {
   // Get available producers
   readonly producers: Map<string, Producer>;
 
+  // Introspection: same Map as `producers` (named producer instances)
+  unwrap<T = Map<string, Producer>>(): T;
+
   // Close connections
   close(): Promise<void>;
 }

@@ -118,6 +118,13 @@ describe('PubSubClient', () => {
       expect(client.producers.has('notifications')).toBe(true);
     });
 
+    it('unwrap returns the internal producers map', async () => {
+      await client.connect();
+      const map = client.unwrap<typeof client.producers>();
+      expect(map).toBe(client.producers);
+      expect(map.size).toBeGreaterThan(0);
+    });
+
     it('should not create duplicate producers if already exist', async () => {
       // First connection
       await client.connect();

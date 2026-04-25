@@ -10,8 +10,6 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
     protected readonly logger =  new Logger(PubSubClient.name)
     private readonly maxRetries = 3; // Number of retry attempts for sending messages
     private readonly retryDelay = 1000; // Delay between retry attempts in milliseconds
-    private client: any; // Keep for compatibility
-    private replyQueueName?: string;
     public readonly producers = new Map<QueueName, Producer>();
 
     constructor(protected options : PubSubOptions) {
@@ -41,10 +39,6 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
         
         const producerNames = Array.from(this.producers.keys());
         this.logger.log(`Available producers: ${producerNames.join(', ')}`);
-
-        if (this.replyQueueName) {
-
-        }
     }
 
     // Implement the abstract publish method from ClientProxy as a stub
@@ -59,11 +53,8 @@ export class PubSubClient extends ClientProxy<PubSubEvents>{
         this.producers.clear();
     }
 
-    public unwrap<T>(): T {
-        if (!this.client) {
-            throw new Error('Client is not initialized');
-        }
-        return this.client as T;
+    public unwrap<T = Map<QueueName, Producer>>(): T {
+        return this.producers as T;
     }
 
     /**
