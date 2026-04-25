@@ -19,7 +19,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "prepublishOnly": "npm run build",
-    "clean": "rm -rf lib/*.js lib/*.d.ts lib/*.js.map"
+    "clean": "rm -rf dist"
   },
   "keywords": [
     "nestjs",
